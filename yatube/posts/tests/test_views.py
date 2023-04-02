@@ -52,48 +52,27 @@ class PostPagesTests(TestCase):
     def test_index_page_show_correct_context(self):
         """Шаблон главной страницы сформирован с правильным контекстом."""
         response = self.authorized_client.get(reverse('posts:index'))
-        first_object = response.context['page_obj'][0]
-        post_text_0 = first_object.text
-        post_pub_date_0 = first_object.pub_date
-        post_author_0 = first_object.author
-        post_group_0 = first_object.group
-
-        self.assertEqual(post_text_0, 'Текст поста')
-        self.assertEqual(post_pub_date_0, PostPagesTests.post.pub_date)
-        self.assertEqual(post_author_0, PostPagesTests.user)
-        self.assertEqual(post_group_0, PostPagesTests.group)
+        page_obj = response.context['page_obj']
+        posts = Post.objects.all()
+        self.assertQuerysetEqual(page_obj, posts, lambda x: x)
 
     def test_group_page_show_correct_context(self):
         """Шаблон страницы группы сформирован с правильным контекстом и
-        содержит пост с группой"""
+        содержит посты с группой"""
         response = self.authorized_client.get(
             reverse('posts:group_list', kwargs={'slug': 'test-slug'}))
-        first_object = response.context['page_obj'][0]
-        post_text_0 = first_object.text
-        post_pub_date_0 = first_object.pub_date
-        post_author_0 = first_object.author
-        post_group_0 = first_object.group
-
-        self.assertEqual(post_text_0, 'Текст поста')
-        self.assertEqual(post_pub_date_0, PostPagesTests.post.pub_date)
-        self.assertEqual(post_author_0, PostPagesTests.user)
-        self.assertEqual(post_group_0, PostPagesTests.group)
+        page_obj = response.context['page_obj']
+        posts = PostPagesTests.group.posts.all()
+        self.assertQuerysetEqual(page_obj, posts, lambda x: x)
 
     def test_profile_page_show_correct_context(self):
         """Шаблон страницы группы сформирован с правильным контекстом и
-        содержит пост указанного пользователя"""
+        содержит посты указанного пользователя"""
         response = self.authorized_client.get(
             reverse('posts:profile', kwargs={'username': 'HasNoName'}))
-        first_object = response.context['page_obj'][0]
-        post_text_0 = first_object.text
-        post_pub_date_0 = first_object.pub_date
-        post_author_0 = first_object.author
-        post_group_0 = first_object.group
-
-        self.assertEqual(post_text_0, 'Текст поста')
-        self.assertEqual(post_pub_date_0, PostPagesTests.post.pub_date)
-        self.assertEqual(post_author_0, PostPagesTests.user)
-        self.assertEqual(post_group_0, PostPagesTests.group)
+        page_obj = response.context['page_obj']
+        posts = PostPagesTests.user.posts.all()
+        self.assertQuerysetEqual(page_obj, posts, lambda x: x)
 
     def test_post_detail_show_correct_context(self):
         """Шаблон страницы поста сформирован с правильным контекстом"""
@@ -118,12 +97,15 @@ class PostPagesTests(TestCase):
                                kwargs={'username': 'HasNoName'})
         }
 
+        posts = []
         for i in range(1, 13):
-            Post.objects.create(
+            post = Post(
                 text='Текст поста',
                 author=PostPagesTests.user,
                 group=PostPagesTests.group
             )
+            posts.append(post)
+        Post.objects.bulk_create(posts)
 
         for page, reverse_name in pages_names.items():
             with self.subTest(reverse_name=reverse_name):
@@ -136,9 +118,8 @@ class PostPagesTests(TestCase):
                 self.assertEqual(len(
                     response_second_page.context['page_obj']), 3)
 
-    def test_create_page_show_correct_context(self):
-        """Форма создания сформирована с правильным контекстом"""
-        response = self.authorized_client.get(reverse('posts:post_create'))
+    def form_show_correct_context(self, reverse_name):
+        response = self.authorized_client.get(reverse_name)
         form_fields = {
             'text': forms.fields.CharField,
             'group': forms.models.ModelChoiceField,
@@ -148,21 +129,16 @@ class PostPagesTests(TestCase):
             with self.subTest(value=value):
                 form_field = response.context.get('form').fields.get(value)
                 self.assertIsInstance(form_field, expected)
+
+    def test_create_page_show_correct_context(self):
+        """Форма создания сформирована с правильным контекстом"""
+        self.form_show_correct_context(reverse('posts:post_create'))
 
     def test_edit_page_show_correct_context(self):
         """Форма редактирования сформирована с правильным контекстом"""
-        response = self.authorized_client.get(
+        self.form_show_correct_context(
             reverse('posts:post_edit',
                     kwargs={'post_id': PostPagesTests.post.pk}))
-        form_fields = {
-            'text': forms.fields.CharField,
-            'group': forms.models.ModelChoiceField,
-        }
-
-        for value, expected in form_fields.items():
-            with self.subTest(value=value):
-                form_field = response.context.get('form').fields.get(value)
-                self.assertIsInstance(form_field, expected)
 
     def test_post_doesnt_exists_at_undesired_group(self):
         """Пост не попал в группу, для которой не был предназначен"""
